@@ -58,7 +58,7 @@ export default function ChatPage() {
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -177,6 +177,7 @@ export default function ChatPage() {
     setMessage('');
     setIsLoading(true);
 
+    // Streaming logic
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
@@ -187,37 +188,55 @@ export default function ChatPage() {
         }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to get response');
-      }
+      if (!response.body) throw new Error('No response body');
 
-      const data = await response.json();
+      const reader = response.body.getReader();
+      let aiText = '';
+      const decoder = new TextDecoder();
 
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        content: stripMarkdown(data.response),
-        role: 'assistant',
-        timestamp: new Date()
-      };
-
+      // Add a temporary assistant message for streaming
       setChats(currentChats => {
-        const finalChats = currentChats.map(chat =>
+        return currentChats.map(chat =>
           chat.id === targetChatId
             ? {
                 ...chat,
-                messages: [...chat.messages, assistantMessage],
+                messages: [
+                  ...chat.messages,
+                  {
+                    id: (Date.now() + 1).toString(),
+                    content: '',
+                    role: 'assistant',
+                    timestamp: new Date()
+                  }
+                ],
                 updatedAt: new Date()
               }
             : chat
         );
-        try {
-          localStorage.setItem('askaussie-chats', JSON.stringify(finalChats));
-        } catch (error) {
-          console.error('Error saving chats:', error);
-        }
-        return finalChats;
       });
+
+      // Stream the response and update the last assistant message
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        aiText += decoder.decode(value);
+
+        setChats(currentChats => {
+          return currentChats.map(chat =>
+            chat.id === targetChatId
+              ? {
+                  ...chat,
+                  messages: chat.messages.map((msg, idx, arr) =>
+                    idx === arr.length - 1 && msg.role === 'assistant'
+                      ? { ...msg, content: aiText }
+                      : msg
+                  ),
+                  updatedAt: new Date()
+                }
+              : chat
+          );
+        });
+      }
 
     } catch (error) {
       console.error('Error sending message:', error);
@@ -383,20 +402,6 @@ export default function ChatPage() {
                   )}
                 </motion.div>
               ))}
-              {isLoading && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="flex items-end justify-start gap-2"
-                >
-                  <div className="bg-gray-200 rounded-full p-2 shadow">
-                    <AiIcon />
-                  </div>
-                  <div className="bg-white border border-gray-200 rounded-2xl px-5 py-3 shadow-md flex items-center">
-                    <LoadingDots />
-                  </div>
-                </motion.div>
-              )}
               <div ref={messagesEndRef} />
             </div>
           )}
