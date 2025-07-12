@@ -13,7 +13,7 @@ const features = [
   },
   {
     title: 'Sleek Interface',
-    desc: 'Enjoy a clean, intuitive legal research experience designed for speed and clarity. Nav test.',
+    desc: 'Enjoy a clean, intuitive legal research experience designed for speed and clarity.',
   },
 ];
 
