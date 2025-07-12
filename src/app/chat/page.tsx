@@ -257,7 +257,7 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 text-black">
+    <div className="flex flex-col h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 text-black">
       {/* Sidebar */}
       <AnimatePresence>
         {sidebarOpen && (
@@ -266,7 +266,7 @@ export default function ChatPage() {
             animate={{ x: 0 }}
             exit={{ x: -320 }}
             transition={{ duration: 0.3 }}
-            className="w-80 bg-white border-r border-gray-200 flex flex-col shadow-lg"
+            className="fixed inset-0 z-30 sm:static sm:z-auto sm:w-80 w-full bg-white border-r border-gray-200 flex flex-col shadow-lg"
           >
             <div className="p-4 border-b border-gray-200">
               <button
@@ -282,7 +282,10 @@ export default function ChatPage() {
                 <motion.div
                   key={chat.id}
                   whileHover={{ scale: 1.02 }}
-                  onClick={() => setCurrentChatId(chat.id)}
+                  onClick={() => {
+                    setCurrentChatId(chat.id);
+                    if (window.innerWidth < 640) setSidebarOpen(false);
+                  }}
                   className={`p-3 rounded-xl mb-2 cursor-pointer transition-colors group relative ${
                     currentChatId === chat.id
                       ? 'bg-gray-200 border border-gray-300'
@@ -307,6 +310,16 @@ export default function ChatPage() {
                 </motion.div>
               ))}
             </div>
+            {/* Overlay close button for mobile */}
+            <button
+              className="sm:hidden absolute top-4 right-4 bg-gray-200 rounded-full p-2"
+              onClick={() => setSidebarOpen(false)}
+              aria-label="Close sidebar"
+            >
+              <svg className="w-6 h-6 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
@@ -314,11 +327,11 @@ export default function ChatPage() {
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col">
         {/* Header */}
-        <div className="h-16 border-b border-gray-200 flex items-center px-6 bg-white/80 backdrop-blur-lg">
+        <div className="h-14 sm:h-16 border-b border-gray-200 flex items-center px-2 sm:px-6 bg-white/80 backdrop-blur-lg">
           <motion.button
             onClick={() => setSidebarOpen(!sidebarOpen)}
             whileTap={{ scale: 0.9 }}
-            className="p-2 hover:bg-gray-100 rounded-lg mr-4 transition-all"
+            className="p-2 hover:bg-gray-100 rounded-lg mr-2 sm:mr-4 transition-all"
             aria-label="Toggle sidebar"
           >
             <motion.div
@@ -333,27 +346,27 @@ export default function ChatPage() {
               </svg>
             </motion.div>
           </motion.button>
-          <h1 className="text-xl font-bold tracking-tight">AskAussie</h1>
-          <div className="ml-auto text-sm text-gray-500">
+          <h1 className="text-lg sm:text-xl font-bold tracking-tight">AskAussie</h1>
+          <div className="ml-auto text-xs sm:text-sm text-gray-500">
             Constitutional AI Assistant
           </div>
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto px-2 sm:px-6 py-2 sm:py-6">
           {!currentChat || currentChat.messages.length === 0 ? (
             <div className="h-full flex items-center justify-center">
               <div className="text-center">
-                <div className="text-6xl mb-4">⚖️</div>
-                <h2 className="text-2xl font-bold mb-2">Welcome to AskAussie</h2>
-                <p className="text-gray-600 max-w-md">
+                <div className="text-5xl sm:text-6xl mb-4">⚖️</div>
+                <h2 className="text-xl sm:text-2xl font-bold mb-2">Welcome to AskAussie</h2>
+                <p className="text-gray-600 max-w-md mx-auto text-base sm:text-lg">
                   Ask me anything about the Australian Constitution. I can help you understand 
                   constitutional law, find specific sections, and explain complex legal concepts.
                 </p>
               </div>
             </div>
           ) : (
-            <div className="max-w-3xl mx-auto flex flex-col gap-4">
+            <div className="max-w-full sm:max-w-3xl mx-auto flex flex-col gap-3 sm:gap-4">
               {currentChat.messages.map((msg) => (
                 <motion.div
                   key={msg.id}
@@ -362,21 +375,21 @@ export default function ChatPage() {
                   className={`flex items-end ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   {msg.role === 'assistant' && (
-                    <div className="flex items-end gap-2">
+                    <div className="flex items-end gap-2 w-full max-w-[90vw] sm:max-w-[70vw]">
                       <div className="bg-gray-200 rounded-full p-2 shadow">
                         <AiIcon />
                       </div>
-                      <div className="bg-white border border-gray-200 rounded-2xl px-5 py-3 shadow-md max-w-[70vw] text-black text-base whitespace-pre-line">
+                      <div className="bg-white border border-gray-200 rounded-2xl px-4 py-2 sm:px-5 sm:py-3 shadow-md text-black text-sm sm:text-base whitespace-pre-line break-words w-full">
                         {msg.content}
                       </div>
                     </div>
                   )}
                   {msg.role === 'user' && (
-                    <div className="flex items-end gap-2 flex-row-reverse">
+                    <div className="flex items-end gap-2 flex-row-reverse w-full max-w-[90vw] sm:max-w-[70vw]">
                       <div className="bg-black rounded-full p-2 shadow">
                         <UserIcon />
                       </div>
-                      <div className="bg-gray-900 text-white rounded-2xl px-5 py-3 shadow-md max-w-[70vw] text-base whitespace-pre-line">
+                      <div className="bg-gray-900 text-white rounded-2xl px-4 py-2 sm:px-5 sm:py-3 shadow-md text-sm sm:text-base whitespace-pre-line break-words w-full">
                         {msg.content}
                       </div>
                     </div>
@@ -392,7 +405,7 @@ export default function ChatPage() {
                   <div className="bg-gray-200 rounded-full p-2 shadow">
                     <AiIcon />
                   </div>
-                  <div className="bg-white border border-gray-200 rounded-2xl px-5 py-3 shadow-md flex items-center">
+                  <div className="bg-white border border-gray-200 rounded-2xl px-4 py-2 sm:px-5 sm:py-3 shadow-md flex items-center">
                     <LoadingDots />
                   </div>
                 </motion.div>
@@ -403,8 +416,8 @@ export default function ChatPage() {
         </div>
 
         {/* Input Area */}
-        <div className="border-t border-gray-200 p-6 bg-white/80 backdrop-blur-lg">
-          <div className="max-w-3xl mx-auto">
+        <div className="border-t border-gray-200 px-2 py-2 sm:p-6 bg-white/80 backdrop-blur-lg">
+          <div className="max-w-full sm:max-w-3xl mx-auto">
             <div className="relative flex items-end">
               <textarea
                 ref={textareaRef}
@@ -412,7 +425,7 @@ export default function ChatPage() {
                 onChange={(e) => setMessage(e.target.value)}
                 onKeyPress={handleKeyPress}
                 placeholder="Ask about the Australian Constitution..."
-                className="w-full p-4 pr-16 border border-gray-300 rounded-2xl resize-none focus:outline-none focus:border-black transition-colors min-h-[48px] max-h-40 text-base bg-gray-50 overflow-hidden"
+                className="w-full p-3 sm:p-4 pr-14 sm:pr-16 border border-gray-300 rounded-2xl resize-none focus:outline-none focus:border-black transition-colors min-h-[44px] sm:min-h-[48px] max-h-32 sm:max-h-40 text-sm sm:text-base bg-gray-50 overflow-hidden"
                 rows={1}
                 disabled={isLoading}
                 style={{ resize: 'none' }}
@@ -421,8 +434,8 @@ export default function ChatPage() {
                 onClick={sendMessage}
                 disabled={!message.trim() || isLoading}
                 whileTap={{ scale: 0.95 }}
-                className="absolute right-3 bottom-3 bg-black text-white rounded-xl px-5 py-2 flex items-center justify-center shadow-lg hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all"
-                style={{ height: '40px', minWidth: '40px' }}
+                className="absolute right-2 sm:right-3 bottom-2 sm:bottom-3 bg-black text-white rounded-xl px-4 sm:px-5 py-2 flex items-center justify-center shadow-lg hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all"
+                style={{ height: '38px', minWidth: '38px' }}
                 aria-label="Send"
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
