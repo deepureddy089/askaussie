@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Saira_Condensed } from "next/font/google";
 import "./globals.css";
+import { SourceCodePro } from '@/app/ui/fonts'  // Adjusted import to match the correct export
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -35,11 +36,7 @@ export default function RootLayout({
        
       </head>
 
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} ${sairaCondensed.variable} antialiased`}
-      >
-        {children}
-      </body>
+      <body className={`${SourceCodePro.className} antialiased`}>{children}</body>
     </html>
   );
 }
