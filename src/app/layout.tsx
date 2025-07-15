@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import "./globals.css";
-import { SourceCodePro } from '@/app/ui/fonts'  // Adjusted import to match the correct export
+import { font } from '@/app/ui/fonts'  // Adjusted import to match the correct export
 
 
 export const metadata: Metadata = {
@@ -20,7 +20,7 @@ export default function RootLayout({
        
       </head>
 
-      <body className={`${SourceCodePro.className} antialiased`}>{children}</body>
+      <body className={`${font.className} antialiased`}>{children}</body>
     </html>
   );
 }
