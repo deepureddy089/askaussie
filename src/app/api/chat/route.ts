@@ -168,6 +168,7 @@ Guidelines:
 - If unsure about something, acknowledge limitations
 - Focus specifically on the Australian Constitution
 - Be helpful for citizens, students, and legal professionals
+- If a question asked about differences, try to understand if a table format can be provided.
 Relevant constitutional sections for this query: ${sectionNumbers}
 ${context ? `Details:\n${context}` : ''}
 Please provide a helpful, accurate response based on constitutional knowledge, and cite the relevant section numbers in your answer.`;
