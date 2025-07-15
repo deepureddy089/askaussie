@@ -2,10 +2,8 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import ReactMarkdown from 'react-markdown'; // Import ReactMarkdown
-import remarkGfm from 'remark-gfm'; // Import remark-gfm for GitHub Flavored Markdown
-
-// Removed stripMarkdown utility function as we will now render Markdown directly.
+import ReactMarkdown from 'react-markdown'; // Import the library
+import remarkGfm from 'remark-gfm'; // Import the GFM plugin
 
 // Icon for User messages
 const UserIcon = () => (
@@ -268,17 +266,6 @@ export default function ChatPage() {
             }
           }
           // 'f:', 'e:', 'd:' lines are for metadata/tool calls and can be ignored for simple text display
-          // If you want to display tool call logic, you would parse '2:' lines here.
-          // Example:
-          // else if (line.startsWith('2:')) {
-          //   try {
-          //     const toolCallData = JSON.parse(line.substring(2));
-          //     console.log("Tool call data received:", toolCallData);
-          //     // You would update a state here to display this structured logic
-          //   } catch (parseError) {
-          //     console.error('Error parsing tool call data from stream:', parseError, 'Line:', line);
-          //   }
-          // }
         }
 
         // Update the assistant's message content as chunks arrive
@@ -289,7 +276,7 @@ export default function ChatPage() {
                   ...chat,
                   messages: chat.messages.map(msg =>
                     msg.id === newAssistantMessageId // Use the state variable here
-                      ? { ...msg, content: fullResponse } // No stripMarkdown here
+                      ? { ...msg, content: fullResponse } // REMOVED stripMarkdown call
                       : msg
                   ),
                 }
@@ -467,19 +454,16 @@ export default function ChatPage() {
                       <div className="bg-gray-200 rounded-full p-2 shadow">
                         <AiIcon />
                       </div>
-                      <div className="bg-white border border-gray-200 rounded-2xl px-5 py-3 shadow-md max-w-[70vw] text-black text-base"> {/* Removed whitespace-pre-line to allow Markdown rendering */}
+                      {/* 
+                        - `prose-p:mb-6` adds a larger bottom margin to each paragraph for more spacing.
+                        - `max-w-none` ensures the prose styles don't restrict the width, letting the parent div control it.
+                      */}
+                      <div className="prose prose-p:mb-6 max-w-none bg-white border border-gray-200 rounded-2xl px-5 py-3 shadow-md max-w-[70vw] text-black text-base">
                         <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
+                          remarkPlugins={[remarkGfm]} // Add the GFM plugin here
                           components={{
-                            h1: ({node, ...props}) => <h1 className="text-xl font-bold mt-4 mb-2" {...props} />,
-                            h2: ({node, ...props}) => <h2 className="text-lg font-bold mt-3 mb-1" {...props} />,
-                            h3: ({node, ...props}) => <h3 className="text-base font-bold mt-2 mb-1" {...props} />,
-                            p: ({node, ...props}) => <p className="mb-1" {...props} />,
-                            ul: ({node, ...props}) => <ul className="list-disc pl-5 mb-1" {...props} />,
-                            ol: ({node, ...props}) => <ol className="list-decimal pl-5 mb-1" {...props} />,
-                            li: ({node, ...props}) => <li className="mb-0.5" {...props} />,
-                            hr: ({node, ...props}) => <hr className="my-4 border-gray-300" {...props} />, // Style horizontal rules if they appear
-                            strong: ({node, ...props}) => <strong className="font-extrabold" {...props} />, // Ensure strong is extra bold
+                            // This override tells react-markdown to render horizontal rules as nothing, effectively removing them.
+                            hr: () => null,
                           }}
                         >
                           {msg.content}

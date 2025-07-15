@@ -133,14 +133,14 @@ export async function POST(req: Request) {
 
     const relevantSections = await findRelevantSections(latestMessage);
 
-    // Construct context string from relevant sections with improved formatting
+    // Construct context string from relevant sections
     const context = relevantSections
       .map(section => {
         const parts: string[] = [];
-        if (section.section) parts.push(`• Section: ${section.section}`);
-        if (section.chapter) parts.push(`• Chapter: ${section.chapter}`);
-        if (section.part) parts.push(`• Part: ${section.part}`);
-        if (section.content) parts.push(`• Text:\n${section.content}`);
+        if (section.section) parts.push(`Section: ${section.section}`);
+        if (section.chapter) parts.push(`Chapter: ${section.chapter}`);
+        if (section.part) parts.push(`Part: ${section.part}`);
+        if (section.content) parts.push(`Content: ${section.content}`);
         return parts.join('\n');
       })
       .join('\n\n---\n\n');
@@ -153,31 +153,24 @@ export async function POST(req: Request) {
       .map(s => String(s).replace(/[^\x00-\x7F]/g, '')) // Remove non-ASCII characters
       .join(', ');
 
-    // REVISED System Prompt (Elite-Tier Legal Assistant)
-    const systemPrompt = `You are AskAussie, a constitutional AI trained on the full text of the Australian Constitution. You are helping users understand specific clauses, legal principles, and government powers.
-
-Your responsibilities:
-1. Interpret the Constitution accurately and precisely
-2. Use plain English to explain legal principles to all citizens
-3. Reference specific sections and clauses when relevant (e.g., "Section 57 says...")
-4. Use bullet points, summaries, and headings for clarity
-5. Remain neutral and legally factual — avoid speculation
-6. If historical or political context is relevant (e.g., 1975 crisis), briefly explain it with dates
-
-Instructions:
-- Cite **exact section numbers** and quote snippets from the constitutional text where useful
-- Prioritize **structure**: begin with a short summary, then break down the constitutional logic
-- Be helpful for lawyers, students, or civic learners
-- Do **not answer from prior knowledge** — use only the constitutional text provided below
-- Never fabricate a section or principle
-- Never fabricate a section or principle
-- Avoid using horizontal rules (---) or other decorative separators in your response.
-- When appropriate and for complex queries, use the 'responseLogic' tool to outline the logical steps of your answer before generating the main text.
-
-You have access to the following constitutional sections, retrieved via AI:${context ? `\n\nRelevant Sections:\n${context}` : ''}
-
-Mention these sections explicitly in your answer.
-`;
+    // System prompt for the AI assistant
+    const systemPrompt = `You are AskAussie, an expert AI assistant specializing in the Australian Constitution. You help users understand the Commonwealth of Australia Constitution Act.
+Your role is to:
+1. Provide accurate information about the Australian Constitution
+2. Explain constitutional concepts clearly and accessibly
+3. Reference specific sections when relevant
+4. Help users understand constitutional rights and government structure
+5. Maintain a professional but friendly tone
+Guidelines:
+- Always base responses on actual constitutional text when possible
+- Cite specific sections when relevant (e.g., "Section 51 of the Constitution...")
+- Explain legal concepts in plain English
+- If unsure about something, acknowledge limitations
+- Focus specifically on the Australian Constitution
+- Be helpful for citizens, students, and legal professionals
+Relevant constitutional sections for this query: ${sectionNumbers}
+${context ? `Details:\n${context}` : ''}
+Please provide a helpful, accurate response based on constitutional knowledge, and cite the relevant section numbers in your answer.`;
 
     // Use the `messages` array directly from the client, as `useChat` already manages history
     const conversationMessages = [
@@ -187,9 +180,9 @@ Mention these sections explicitly in your answer.
 
     // Stream the text response from OpenAI
     const result = await streamText({
-      model: openAIProvider.chat("gpt-4o"), // Using a valid, current model name
+      model: openAIProvider.chat("gpt-4.1"), // Using a valid, current model name
       messages: conversationMessages,
-      maxTokens: 2000, // Increased maxTokens as requested
+      maxTokens: 1000,
       temperature: 0.1, // Lower temperature for more factual/less creative responses
     });
 
