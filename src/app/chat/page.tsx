@@ -5,28 +5,24 @@ import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown'; // Import the library
 import remarkGfm from 'remark-gfm'; // Import the GFM plugin
 
-// Icon for User messages
-const UserIcon = () => (
-  <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="2" />
-    <path stroke="currentColor" strokeWidth="2" d="M4 20c0-2.5 3.5-4 8-4s8 1.5 8 4" />
-  </svg>
-);
-
-// Icon for AI messages
-const AiIcon = () => (
-  <svg className="w-6 h-6 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <rect x="4" y="4" width="16" height="16" rx="8" stroke="currentColor" strokeWidth="2" />
-    <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
-  </svg>
-);
-
 // Loading dots animation for AI responses
 const LoadingDots = () => (
   <div className="flex items-center space-x-1">
-    <motion.span className="w-2 h-2 bg-gray-400 rounded-full" animate={{ y: [0, -4, 0] }} transition={{ repeat: Infinity, duration: 0.6 }} />
-    <motion.span className="w-2 h-2 bg-gray-400 rounded-full" animate={{ y: [0, -4, 0] }} transition={{ repeat: Infinity, duration: 0.6, delay: 0.2 }} />
-    <motion.span className="w-2 h-2 bg-gray-400 rounded-full" animate={{ y: [0, -4, 0] }} transition={{ repeat: Infinity, duration: 0.6, delay: 0.4 }} />
+    <motion.span 
+      className="w-1.5 h-1.5 bg-emerald-500 rounded-full" 
+      animate={{ opacity: [0.4, 1, 0.4] }} 
+      transition={{ repeat: Infinity, duration: 1, delay: 0 }} 
+    />
+    <motion.span 
+      className="w-1.5 h-1.5 bg-emerald-500 rounded-full" 
+      animate={{ opacity: [0.4, 1, 0.4] }} 
+      transition={{ repeat: Infinity, duration: 1, delay: 0.2 }} 
+    />
+    <motion.span 
+      className="w-1.5 h-1.5 bg-emerald-500 rounded-full" 
+      animate={{ opacity: [0.4, 1, 0.4] }} 
+      transition={{ repeat: Infinity, duration: 1, delay: 0.4 }} 
+    />
   </div>
 );
 
@@ -55,6 +51,10 @@ export default function ChatPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false); // State for sidebar visibility - CLOSED BY DEFAULT
   const [pendingAssistantMessageId, setPendingAssistantMessageId] = useState<string | null>(null); // New state for pending message ID
+  const [abortController, setAbortController] = useState<AbortController | null>(null); // State for controlling stream abort
+  const [searchTerm, setSearchTerm] = useState(''); // State for search term
+  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system'); // Theme state
+  const [isDark, setIsDark] = useState(false); // Computed dark mode state
 
   // Refs for scrolling to the end of messages and for textarea auto-resize
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -75,6 +75,41 @@ export default function ChatPage() {
       textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px'; // Set to scroll height
     }
   }, [message]);
+
+  // Effect to handle theme changes and system preference detection
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('askaussie-theme') as 'light' | 'dark' | 'system' || 'system';
+    setTheme(savedTheme);
+
+    const updateTheme = () => {
+      if (savedTheme === 'system') {
+        const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        setIsDark(systemPrefersDark);
+        document.documentElement.classList.toggle('dark', systemPrefersDark);
+      } else {
+        const shouldBeDark = savedTheme === 'dark';
+        setIsDark(shouldBeDark);
+        document.documentElement.classList.toggle('dark', shouldBeDark);
+      }
+    };
+
+    updateTheme();
+    
+    // Listen for system theme changes
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    mediaQuery.addEventListener('change', updateTheme);
+    
+    return () => mediaQuery.removeEventListener('change', updateTheme);
+  }, [theme]);
+
+  // Function to toggle theme
+  const toggleTheme = () => {
+    const themes: ('light' | 'dark' | 'system')[] = ['light', 'dark', 'system'];
+    const currentIndex = themes.indexOf(theme);
+    const nextTheme = themes[(currentIndex + 1) % themes.length];
+    setTheme(nextTheme);
+    localStorage.setItem('askaussie-theme', nextTheme);
+  };
 
   // Effect to load chats from localStorage on component mount
   useEffect(() => {
@@ -140,6 +175,16 @@ export default function ChatPage() {
     }
   };
 
+  // Function to stop the current streaming
+  const stopStreaming = () => {
+    if (abortController) {
+      abortController.abort();
+      setAbortController(null);
+      setIsLoading(false);
+      setPendingAssistantMessageId(null);
+    }
+  };
+
   // Function to send a message to the AI API
   const sendMessage = async () => {
     if (!message.trim() || isLoading) return; // Prevent sending empty messages or while loading
@@ -199,6 +244,10 @@ export default function ChatPage() {
     setMessage(''); // Clear the input field
     setIsLoading(true); // Set loading state
 
+    // Create new AbortController for this request
+    const controller = new AbortController();
+    setAbortController(controller);
+
     // Add a placeholder for the assistant's response to show immediate feedback
     const newAssistantMessageId = (Date.now() + 1).toString(); // Generate ID here
     setPendingAssistantMessageId(newAssistantMessageId); // Store it in state
@@ -228,6 +277,7 @@ export default function ChatPage() {
         body: JSON.stringify({
           messages: chatHistoryForApi // Send the full history including the latest user message
         }),
+        signal: controller.signal // Add abort signal
       });
 
       if (!response.ok) {
@@ -305,37 +355,74 @@ export default function ChatPage() {
 
 
     } catch (error) {
-      console.error('Error sending message:', error);
-      const errorMessageContent = error instanceof Error ? error.message : 'Sorry, I encountered an error. Please try again.';
-      // Update the assistant's placeholder message with the error
-      setChats(currentChats => {
-        const errorChats = currentChats.map(chat =>
-          chat.id === targetChatId
-            ? {
-                ...chat,
-                messages: chat.messages.map(msg =>
-                  msg.id === newAssistantMessageId // Use the state variable here
-                    ? { ...msg, content: `Error: ${errorMessageContent}` } // Show error in assistant bubble
-                    : msg
-                ),
-                updatedAt: new Date()
-              }
-            : chat
-        );
-        try {
-          localStorage.setItem('askaussie-chats', JSON.stringify(errorChats));
-        } catch (error) {
-          console.error('Error saving chats after error:', error);
-        }
-        return errorChats;
-      });
+      // Check if the error is due to abort signal
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.log('Request was aborted');
+        // Remove the incomplete assistant message
+        setChats(currentChats => {
+          const updatedChats = currentChats.map(chat =>
+            chat.id === targetChatId
+              ? {
+                  ...chat,
+                  messages: chat.messages.filter(msg => msg.id !== newAssistantMessageId),
+                  updatedAt: new Date()
+                }
+              : chat
+          );
+          try {
+            localStorage.setItem('askaussie-chats', JSON.stringify(updatedChats));
+          } catch (storageError) {
+            console.error('Error saving chats after abort:', storageError);
+          }
+          return updatedChats;
+        });
+      } else {
+        console.error('Error sending message:', error);
+        const errorMessageContent = error instanceof Error ? error.message : 'Sorry, I encountered an error. Please try again.';
+        // Update the assistant's placeholder message with the error
+        setChats(currentChats => {
+          const errorChats = currentChats.map(chat =>
+            chat.id === targetChatId
+              ? {
+                  ...chat,
+                  messages: chat.messages.map(msg =>
+                    msg.id === newAssistantMessageId // Use the state variable here
+                      ? { ...msg, content: `Error: ${errorMessageContent}` } // Show error in assistant bubble
+                      : msg
+                  ),
+                  updatedAt: new Date()
+                }
+              : chat
+          );
+          try {
+            localStorage.setItem('askaussie-chats', JSON.stringify(errorChats));
+          } catch (error) {
+            console.error('Error saving chats after error:', error);
+          }
+          return errorChats;
+        });
+      }
     } finally {
       setIsLoading(false); // Always stop loading regardless of success or failure
       setPendingAssistantMessageId(null); // Clear pending message ID
+      setAbortController(null); // Clear abort controller
     }
   };
 
-  // Handle Enter key press for sending messages (Shift+Enter for new line)
+  // Enhanced search function that searches through chat titles and message content
+  const filteredChats = chats.filter(chat => {
+    const searchLower = searchTerm.toLowerCase();
+    
+    // Search in chat title
+    if (chat.title.toLowerCase().includes(searchLower)) {
+      return true;
+    }
+    
+    // Search in message content
+    return chat.messages.some(message => 
+      message.content.toLowerCase().includes(searchLower)
+    );
+  });
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault(); // Prevent default new line behavior
@@ -344,56 +431,139 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 text-black">
-      {/* Sidebar */}
+    <div className={`flex h-screen transition-colors duration-300 ${
+      isDark 
+        ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white' 
+        : 'bg-gradient-to-br from-gray-50 via-white to-gray-100 text-black'
+    }`}>
+      {/* Collapsible Left Sidebar */}
       <AnimatePresence>
         {sidebarOpen && (
           <motion.div
-            initial={{ x: -320 }}
-            animate={{ x: 0 }}
-            exit={{ x: -320 }}
-            transition={{ duration: 0.3 }}
-            className="w-80 bg-white border-r border-gray-200 flex flex-col shadow-lg z-10" // Added z-10 for layering
+            initial={{ x: -320, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: -320, opacity: 0 }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
+            className={`w-80 border-r flex flex-col shadow-xl z-10 ${
+              isDark 
+                ? 'bg-gray-800 border-gray-700' 
+                : 'bg-white border-gray-200'
+            }`}
           >
-            <div className="p-4 border-b border-gray-200">
+            {/* Header Section - No duplicate logo when sidebar is open */}
+            <div className={`p-4 border-b ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
               <button
                 onClick={createNewChat}
-                className="w-full px-4 py-3 bg-black text-white rounded-xl hover:bg-gray-800 transition-colors flex items-center justify-center font-medium"
+                className={`w-full px-4 py-3 rounded-xl transition-all flex items-center justify-center font-medium ${
+                  isDark 
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white' 
+                    : 'bg-black hover:bg-gray-800 text-white'
+                }`}
               >
-                <span className="mr-2 text-lg">+</span>
+                <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
                 New Chat
               </button>
             </div>
+
+            {/* Chat History Section */}
             <div className="flex-1 overflow-y-auto p-2">
-              {chats.map((chat) => (
-                <motion.div
-                  key={chat.id}
-                  whileHover={{ scale: 1.02 }}
-                  onClick={() => setCurrentChatId(chat.id)}
-                  className={`p-3 rounded-xl mb-2 cursor-pointer transition-colors group relative ${
-                    currentChatId === chat.id
-                      ? 'bg-gray-200 border border-gray-300'
-                      : 'hover:bg-gray-100'
-                  }`}
-                >
-                  <div className="font-medium text-sm truncate">
-                    {chat.title}
+              <div className={`text-xs font-medium uppercase tracking-wide px-3 py-2 mb-2 ${
+                isDark ? 'text-gray-400' : 'text-gray-500'
+              }`}>
+                Chat History ({chats.length})
+              </div>
+
+              {/* Enhanced Search Section */}
+              <div className={`p-3 mb-2 border-b ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Search conversations & messages..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className={`w-full px-3 py-2 pl-9 border rounded-lg text-sm focus:outline-none focus:ring-2 transition-all ${
+                      isDark 
+                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-emerald-500 focus:ring-emerald-500/20' 
+                        : 'bg-gray-50 border-gray-200 focus:border-emerald-400 focus:ring-emerald-100'
+                    }`}
+                  />
+                  <svg className={`absolute left-3 top-2.5 w-4 h-4 ${isDark ? 'text-gray-400' : 'text-gray-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+                
+                {/* Results counter */}
+                {searchTerm && (
+                  <div className={`text-xs mt-2 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                    {filteredChats.length} result{filteredChats.length !== 1 ? 's' : ''} found
                   </div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    {chat.messages.length} messages
-                  </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation(); // Prevent selecting chat when deleting
-                      deleteChat(chat.id);
-                    }}
-                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-red-100 rounded"
-                    aria-label={`Delete chat ${chat.title}`}
+                )}
+              </div>
+
+              {chats.length === 0 ? (
+                <div className={`text-center text-sm py-8 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                  <div className="text-3xl mb-2">💬</div>
+                  No conversations yet
+                </div>
+              ) : filteredChats.length === 0 ? (
+                <div className={`text-center text-sm py-8 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                  <div className="text-3xl mb-2">🔍</div>
+                  No matches found
+                </div>
+              ) : (
+                filteredChats.map((chat) => (
+                  <motion.div
+                    key={chat.id}
+                    whileHover={{ scale: 1.02 }}
+                    onClick={() => setCurrentChatId(chat.id)}
+                    className={`p-3 rounded-xl mb-2 cursor-pointer transition-all group relative ${
+                      currentChatId === chat.id
+                        ? isDark 
+                          ? 'bg-emerald-900/30 border border-emerald-700' 
+                          : 'bg-emerald-50 border border-emerald-300'
+                        : isDark 
+                          ? 'hover:bg-gray-700' 
+                          : 'hover:bg-gray-100'
+                    }`}
                   >
-                    <span className="text-red-500 text-xs">×</span>
-                  </button>
-                </motion.div>
-              ))}
+                    <div className={`font-medium text-sm truncate ${
+                      currentChatId === chat.id 
+                        ? isDark ? 'text-emerald-300' : 'text-emerald-700'
+                        : isDark ? 'text-white' : 'text-gray-900'
+                    }`}>
+                      {chat.title}
+                    </div>
+                    <div className={`text-xs mt-1 ${
+                      isDark ? 'text-gray-400' : 'text-gray-500'
+                    }`}>
+                      {chat.messages.length} messages • {new Date(chat.updatedAt).toLocaleDateString()}
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteChat(chat.id);
+                      }}
+                      className={`absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded ${
+                        isDark ? 'hover:bg-red-900/30' : 'hover:bg-red-100'
+                      }`}
+                      aria-label={`Delete chat ${chat.title}`}
+                    >
+                      <svg className="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </motion.div>
+                ))
+              )}
+            </div>
+
+            {/* Footer with theme info */}
+            <div className={`p-4 border-t ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
+              <div className={`text-sm text-center ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                Constitutional AI Assistant
+              </div>
             </div>
           </motion.div>
         )}
@@ -401,141 +571,382 @@ export default function ChatPage() {
 
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <div className="h-16 border-b border-gray-200 flex items-center px-6 bg-white/80 backdrop-blur-lg">
-          <motion.button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            whileTap={{ scale: 0.9 }}
-            className="p-2 hover:bg-gray-100 rounded-lg mr-4 transition-all"
-            aria-label="Toggle sidebar"
-          >
-            <motion.div
-              initial={false}
-              animate={sidebarOpen ? { rotate: 90 } : { rotate: 0 }}
-              transition={{ type: 'spring', stiffness: 300 }}
+        {/* Elite Header with Theme Toggle */}
+        <div className={`h-16 border-b flex items-center px-6 backdrop-blur-lg transition-colors ${
+          isDark 
+            ? 'bg-gray-800/80 border-gray-700' 
+            : 'bg-white/80 border-gray-200'
+        }`}>
+          <div className="flex items-center gap-4">
+            {/* Smart Toggle Button */}
+            <motion.button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              whileTap={{ scale: 0.95 }}
+              className={`p-2 rounded-xl transition-all flex items-center justify-center ${
+                isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+              }`}
+              aria-label="Toggle sidebar"
             >
-              <svg className="w-6 h-6 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <rect x="4" y="7" width="16" height="2" rx="1" fill="currentColor" />
-                <rect x="4" y="11" width="16" height="2" rx="1" fill="currentColor" />
-                <rect x="4" y="15" width="16" height="2" rx="1" fill="currentColor" />
-              </svg>
-            </motion.div>
-          </motion.button>
-          <h1 className="text-xl font-bold tracking-tight">AskAussie</h1>
-          <div className="ml-auto text-sm text-gray-500">
-            Constitutional AI Assistant
+              <motion.div
+                initial={false}
+                animate={sidebarOpen ? { rotate: 0 } : { rotate: 0 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+              >
+                {sidebarOpen ? (
+                  <svg className={`w-6 h-6 ${isDark ? 'text-gray-300' : 'text-gray-700'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                  </svg>
+                ) : (
+                  <svg className={`w-6 h-6 ${isDark ? 'text-gray-300' : 'text-gray-700'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h8M4 18h16" />
+                  </svg>
+                )}
+              </motion.div>
+            </motion.button>
+            
+            {/* Brand Identity - Only show when sidebar is closed */}
+            {!sidebarOpen && (
+              <div className="flex items-center gap-2">
+                <div className="text-2xl">⚖️</div>
+                <h1 className={`text-xl font-bold tracking-tight ${isDark ? 'text-white' : 'text-gray-800'}`}>
+                  AskAussie
+                </h1>
+              </div>
+            )}
+          </div>
+          
+          {/* Right side controls */}
+          <div className="ml-auto flex items-center gap-3">
+            {/* Theme Toggle */}
+            <motion.button
+              onClick={toggleTheme}
+              whileTap={{ scale: 0.95 }}
+              className={`p-2 rounded-xl transition-all flex items-center justify-center ${
+                isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+              }`}
+              aria-label={`Switch to ${theme === 'light' ? 'dark' : theme === 'dark' ? 'system' : 'light'} mode`}
+            >
+              {theme === 'light' ? (
+                <svg className={`w-5 h-5 ${isDark ? 'text-gray-300' : 'text-gray-700'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+              ) : theme === 'dark' ? (
+                <svg className={`w-5 h-5 ${isDark ? 'text-gray-300' : 'text-gray-700'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                </svg>
+              ) : (
+                <svg className={`w-5 h-5 ${isDark ? 'text-gray-300' : 'text-gray-700'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              )}
+            </motion.button>
+            
+            {/* Status indicator */}
+            <div className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+              {currentChat ? (
+                <span className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                  {currentChat.messages.length} messages
+                </span>
+              ) : (
+                'Ready to help with constitutional law'
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Messages */}
+        {/* Elite Messages Area */}
         <div className="flex-1 overflow-y-auto p-6">
           {!currentChat || currentChat.messages.length === 0 ? (
             <div className="h-full flex items-center justify-center">
-              <div className="text-center">
-                <div className="text-6xl mb-4">⚖️</div>
-                <h2 className="text-2xl font-bold mb-2">Welcome to AskAussie</h2>
-                <p className="text-gray-600 max-w-md">
-                  Ask me anything about the Australian Constitution. I can help you understand
-                  constitutional law, find specific sections, and explain complex legal concepts.
+              <div className="text-center max-w-2xl mx-auto">
+                <div className="text-8xl mb-6">⚖️</div>
+                <h2 className={`text-3xl font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                  Welcome to AskAussie
+                </h2>
+                <p className={`text-lg mb-8 leading-relaxed ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                  Your elite constitutional AI assistant. Get expert insights on Australian constitutional law, 
+                  government powers, rights and freedoms, or specific constitutional provisions.
                 </p>
+                
+                {/* Elite Quick Start Suggestions */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
+                  {[
+                    { 
+                      title: "Legislative Powers", 
+                      question: "What are the main powers of the Australian Parliament under Section 51?",
+                      icon: "🏛️"
+                    },
+                    { 
+                      title: "Rights & Freedoms", 
+                      question: "What rights and freedoms are protected in the Australian Constitution?",
+                      icon: "🛡️"
+                    },
+                    { 
+                      title: "Federal Structure", 
+                      question: "How does the Constitution divide power between federal and state governments?",
+                      icon: "🌏"
+                    },
+                    { 
+                      title: "Constitutional Interpretation", 
+                      question: "How do courts interpret the Australian Constitution?",
+                      icon: "⚖️"
+                    }
+                  ].map((suggestion, index) => (
+                    <motion.button
+                      key={index}
+                      onClick={() => setMessage(suggestion.question)}
+                      whileHover={{ scale: 1.02, y: -2 }}
+                      whileTap={{ scale: 0.98 }}
+                      className={`p-4 text-left border rounded-xl transition-all group ${
+                        isDark 
+                          ? 'border-gray-700 hover:border-emerald-500 hover:bg-gray-800/50' 
+                          : 'border-gray-200 hover:border-emerald-300 hover:bg-emerald-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-xl">{suggestion.icon}</span>
+                        <h3 className={`font-medium ${
+                          isDark 
+                            ? 'text-white group-hover:text-emerald-300' 
+                            : 'text-gray-900 group-hover:text-emerald-700'
+                        }`}>
+                          {suggestion.title}
+                        </h3>
+                      </div>
+                      <p className={`text-sm ${
+                        isDark 
+                          ? 'text-gray-400 group-hover:text-emerald-400' 
+                          : 'text-gray-600 group-hover:text-emerald-600'
+                      }`}>
+                        {suggestion.question}
+                      </p>
+                    </motion.button>
+                  ))}
+                </div>
               </div>
             </div>
           ) : (
-            <div className="max-w-3xl mx-auto flex flex-col gap-4">
-              {currentChat.messages.map((msg) => (
+            <div className="max-w-4xl mx-auto flex flex-col gap-8">
+              {currentChat.messages.map((msg, index) => (
                 <motion.div
                   key={msg.id}
-                  initial={{ opacity: 0, y: 20 }}
+                  initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className={`flex items-end ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  transition={{ delay: index * 0.05, type: "spring", stiffness: 100 }}
+                  className="w-full"
                 >
-                  {msg.role === 'assistant' && (
-                    <div className="flex items-end gap-2">
-                      <div className="bg-gray-200 rounded-full p-2 shadow">
-                        <AiIcon />
+                  {msg.role === 'user' && (
+                    <div className="mb-6">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-blue-600 flex items-center justify-center shadow-lg">
+                          <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                          </svg>
+                        </div>
+                        <span className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                          You
+                        </span>
+                        <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                          {new Date(msg.timestamp).toLocaleTimeString()}
+                        </span>
                       </div>
-                      {/* 
-                        - `prose-p:mb-6` adds a larger bottom margin to each paragraph for more spacing.
-                        - `max-w-none` ensures the prose styles don't restrict the width, letting the parent div control it.
-                      */}
-                      <div className="prose prose-p:mb-6 max-w-none bg-white border border-gray-200 rounded-2xl px-5 py-3 shadow-md max-w-[70vw] text-black text-base">
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm]} // Add the GFM plugin here
-                          components={{
-                            // This override tells react-markdown to render horizontal rules as nothing, effectively removing them.
-                            hr: () => null,
-                          }}
-                        >
-                          {msg.content}
-                        </ReactMarkdown>
-                        {/* Show loading dots only if it's the current pending assistant message and content is empty */}
-                        {isLoading && msg.id === pendingAssistantMessageId && msg.content === '' && <LoadingDots />}
+                      <div className={`ml-11 leading-relaxed whitespace-pre-line ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
+                        {msg.content}
                       </div>
                     </div>
                   )}
-                  {msg.role === 'user' && (
-                    <div className="flex items-end gap-2 flex-row-reverse">
-                      <div className="bg-black rounded-full p-2 shadow">
-                        <UserIcon />
+                  
+                  {msg.role === 'assistant' && (
+                    <div className="mb-6">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-r from-emerald-500 to-emerald-600 flex items-center justify-center shadow-lg">
+                          <span className="text-white text-sm font-medium">⚖️</span>
+                        </div>
+                        <span className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                          AskAussie
+                        </span>
+                        <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                          {new Date(msg.timestamp).toLocaleTimeString()}
+                        </span>
                       </div>
-                      <div className="bg-gray-900 text-white rounded-2xl px-5 py-3 shadow-md max-w-[70vw] text-base whitespace-pre-line">
-                        {msg.content}
+                      <div className="ml-11">
+                        <div className={`prose max-w-none leading-relaxed ${
+                          isDark ? 'prose-invert text-gray-200' : 'prose-gray text-gray-800'
+                        }`}>
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              hr: () => null,
+                              p: ({ children }) => <p className="mb-4 last:mb-0">{children}</p>,
+                              h1: ({ children }) => <h1 className={`text-xl font-semibold mb-3 ${isDark ? 'text-white' : 'text-gray-900'}`}>{children}</h1>,
+                              h2: ({ children }) => <h2 className={`text-lg font-semibold mb-3 ${isDark ? 'text-white' : 'text-gray-900'}`}>{children}</h2>,
+                              h3: ({ children }) => <h3 className={`text-base font-semibold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>{children}</h3>,
+                              ul: ({ children }) => <ul className="list-disc ml-6 mb-4 space-y-1">{children}</ul>,
+                              ol: ({ children }) => <ol className="list-decimal ml-6 mb-4 space-y-1">{children}</ol>,
+                              li: ({ children }) => <li className={isDark ? 'text-gray-200' : 'text-gray-800'}>{children}</li>,
+                              blockquote: ({ children }) => (
+                                <blockquote className={`border-l-4 border-emerald-500 pl-4 italic mb-4 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                  {children}
+                                </blockquote>
+                              ),
+                              code: ({ children }) => (
+                                <code className={`px-2 py-1 rounded text-sm font-mono ${
+                                  isDark ? 'bg-gray-700 text-gray-200' : 'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {children}
+                                </code>
+                              ),
+                              pre: ({ children }) => (
+                                <pre className={`p-4 rounded-lg overflow-x-auto mb-4 ${
+                                  isDark ? 'bg-gray-700' : 'bg-gray-100'
+                                }`}>
+                                  {children}
+                                </pre>
+                              ),
+                            }}
+                          >
+                            {msg.content}
+                          </ReactMarkdown>
+                          {/* Enhanced loading indicator */}
+                          {isLoading && msg.id === pendingAssistantMessageId && msg.content === '' && (
+                            <div className={`flex items-center gap-3 p-3 rounded-lg ${
+                              isDark ? 'bg-gray-800/50' : 'bg-gray-50'
+                            }`}>
+                              <LoadingDots />
+                              <span className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                                Analyzing constitutional provisions...
+                              </span>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}
                 </motion.div>
               ))}
-              {/* Show loading dots for a new assistant message if user just sent one and it's loading,
-                  and no assistant placeholder has been fully rendered yet */}
+              
+              {/* Enhanced loading indicator for new messages */}
               {isLoading && currentChat.messages[currentChat.messages.length - 1]?.role === 'user' && !pendingAssistantMessageId && (
                 <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="flex items-end justify-start gap-2"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="mb-6"
                 >
-                  <div className="bg-gray-200 rounded-full p-2 shadow">
-                    <AiIcon />
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-r from-emerald-500 to-emerald-600 flex items-center justify-center shadow-lg">
+                      <span className="text-white text-sm font-medium">⚖️</span>
+                    </div>
+                    <span className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                      AskAussie
+                    </span>
                   </div>
-                  <div className="bg-white border border-gray-200 rounded-2xl px-5 py-3 shadow-md flex items-center">
+                  <div className={`ml-11 flex items-center gap-3 p-3 rounded-lg ${
+                    isDark ? 'bg-gray-800/50' : 'bg-gray-50'
+                  }`}>
                     <LoadingDots />
+                    <span className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                      Researching constitutional law...
+                    </span>
                   </div>
                 </motion.div>
               )}
+              
               <div ref={messagesEndRef} />
             </div>
           )}
         </div>
 
-        {/* Input Area */}
-        <div className="border-t border-gray-200 p-6 bg-white/80 backdrop-blur-lg">
-          <div className="max-w-3xl mx-auto">
-            <div className="relative flex items-end">
+        {/* Elite Input Area */}
+        <div className={`border-t p-6 backdrop-blur-lg transition-colors ${
+          isDark 
+            ? 'bg-gray-800/80 border-gray-700' 
+            : 'bg-white/80 border-gray-200'
+        }`}>
+          <div className="max-w-4xl mx-auto">
+            <div className="relative">
               <textarea
                 ref={textareaRef}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 onKeyPress={handleKeyPress}
                 placeholder="Ask about the Australian Constitution..."
-                className="w-full p-4 pr-16 border border-gray-300 rounded-2xl resize-none focus:outline-none focus:border-black transition-colors min-h-[48px] max-h-40 text-base bg-gray-50 overflow-hidden"
+                className={`w-full p-4 pr-16 border rounded-2xl resize-none focus:outline-none focus:ring-2 transition-all min-h-[60px] max-h-40 text-base shadow-lg ${
+                  isDark 
+                    ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-emerald-500 focus:ring-emerald-500/20' 
+                    : 'bg-white border-gray-200 focus:border-emerald-400 focus:ring-emerald-100'
+                }`}
                 rows={1}
                 disabled={isLoading}
                 style={{ resize: 'none' }}
               />
-              <motion.button
-                onClick={sendMessage}
-                disabled={!message.trim() || isLoading}
-                whileTap={{ scale: 0.95 }}
-                className="absolute right-3 bottom-3 bg-black text-white rounded-xl px-5 py-2 flex items-center justify-center shadow-lg hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all"
-                style={{ height: '40px', minWidth: '40px' }}
-                aria-label="Send"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M5 12l14-7-7 14-2-5-5-2z" />
-                </svg>
-              </motion.button>
+              {isLoading ? (
+                <motion.button
+                  onClick={stopStreaming}
+                  whileTap={{ scale: 0.95 }}
+                  whileHover={{ scale: 1.05 }}
+                  className="absolute right-3 bottom-3 bg-red-500 text-white rounded-xl p-2 flex items-center justify-center shadow-lg hover:bg-red-600 transition-all group"
+                  style={{ width: '44px', height: '44px' }}
+                  aria-label="Stop"
+                >
+                  <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
+                    <rect x="6" y="6" width="12" height="12" rx="2" />
+                  </svg>
+                </motion.button>
+              ) : (
+                <motion.button
+                  onClick={sendMessage}
+                  disabled={!message.trim() || isLoading}
+                  whileTap={{ scale: 0.95 }}
+                  whileHover={{ scale: message.trim() ? 1.05 : 1 }}
+                  className={`absolute right-3 bottom-3 rounded-xl p-2 flex items-center justify-center shadow-lg transition-all group ${
+                    message.trim() 
+                      ? 'bg-emerald-500 hover:bg-emerald-600 text-white' 
+                      : isDark 
+                        ? 'bg-gray-600 text-gray-400 cursor-not-allowed' 
+                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  }`}
+                  style={{ width: '44px', height: '44px' }}
+                  aria-label="Send"
+                >
+                  <svg className={`w-5 h-5 transition-transform ${message.trim() ? 'group-hover:scale-110 group-hover:translate-x-0.5' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                  </svg>
+                </motion.button>
+              )}
             </div>
-            <div className="text-xs text-gray-500 mt-2 text-center">
-              Press Enter to send, Shift+Enter for new line
+            
+            {/* Enhanced status bar */}
+            <div className={`text-xs mt-3 flex items-center justify-between ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+              <div className="flex items-center gap-4">
+                {isLoading ? (
+                  <span className="flex items-center gap-2">
+                    <LoadingDots />
+                    <span>Processing constitutional query</span>
+                    <span>•</span>
+                    <button 
+                      onClick={stopStreaming}
+                      className="text-red-500 hover:text-red-400 transition-colors"
+                    >
+                      Click to stop
+                    </button>
+                  </span>
+                ) : (
+                  <span>Press Enter to send • Shift+Enter for new line</span>
+                )}
+              </div>
+              
+              {/* Character count and theme indicator */}
+              <div className="flex items-center gap-3">
+                {message && (
+                  <span className={`text-xs ${message.length > 1000 ? 'text-orange-500' : ''}`}>
+                    {message.length} chars
+                  </span>
+                )}
+                <span className="capitalize text-xs">
+                  {theme} mode
+                </span>
+              </div>
             </div>
           </div>
         </div>
