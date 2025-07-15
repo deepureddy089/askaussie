@@ -202,15 +202,18 @@ Please provide a helpful, accurate response based on constitutional knowledge, a
       console.error('Error Message:', error.message);
       console.error('Stack:', error.stack);
 
-      // You can still check for API-specific properties after confirming it's an object
-      // This is a simple way to check for properties on an unknown object
-      const errorAsObject = error as { [key: string]: any };
-      if (errorAsObject.name === 'APIError' || (errorAsObject.status && errorAsObject.headers)) {
-        console.error('--- OpenAI API Error Details ---');
-        console.error('Status:', errorAsObject.status);
-        if (errorAsObject.code) console.error('Code:', errorAsObject.code);
-        if (errorAsObject.param) console.error('Param:', errorAsObject.param);
-        if (errorAsObject.type) console.error('Type:', errorAsObject.type);
+      // Safely check for additional properties without using 'any'
+      if (typeof error === 'object' && error !== null) {
+        // By casting to 'unknown' first, we tell TypeScript this is an intentional conversion.
+        const errorAsObject = error as unknown as Record<string, unknown>;
+        if (errorAsObject.name === 'APIError' || errorAsObject.status) {
+          console.error('--- OpenAI API Error Details ---');
+          // Now you can safely check for these properties
+          if ('status' in errorAsObject) console.error('Status:', errorAsObject.status);
+          if ('code' in errorAsObject) console.error('Code:', errorAsObject.code);
+          if ('param' in errorAsObject) console.error('Param:', errorAsObject.param);
+          if ('type' in errorAsObject) console.error('Type:', errorAsObject.type);
+        }
       }
     } else {
       // Handle cases where the thrown value is not an Error object
