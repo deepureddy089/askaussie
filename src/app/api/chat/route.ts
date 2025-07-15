@@ -194,32 +194,26 @@ Please provide a helpful, accurate response based on constitutional knowledge, a
       }
     });
 
-  } catch (error: any) { // Explicitly type error as 'any' or 'unknown' for better handling
+  } catch (error: unknown) { // Changed from 'any' to 'unknown'
     console.error('Error in chat API:', error);
 
-    // Attempt to log more specific details for common API errors
-    if (error.name === 'APIError' || (error.status && error.headers)) {
-      console.error('--- OpenAI API Error Details ---');
-      console.error('Status:', error.status);
-      console.error('Message:', error.message);
-      if (error.code) console.error('Code:', error.code);
-      if (error.param) console.error('Param:', error.param);
-      if (error.type) console.error('Type:', error.type);
-      if (error.headers) console.error('Headers:', Object.fromEntries(error.headers.entries()));
-      if (error.response) {
-        try {
-          // Attempt to parse the response body for more details
-          const errorBody = await error.response.json();
-          console.error('Response Body:', errorBody);
-        } catch (jsonError) {
-          console.error('Could not parse OpenAI API error response body:', jsonError);
-        }
-      }
-      console.error('------------------------------');
-    } else if (error instanceof Error) {
-      console.error('General JavaScript Error:', error.message);
+    // Check if the error is a standard Error object to safely access its properties
+    if (error instanceof Error) {
+      console.error('Error Message:', error.message);
       console.error('Stack:', error.stack);
+
+      // You can still check for API-specific properties after confirming it's an object
+      // This is a simple way to check for properties on an unknown object
+      const errorAsObject = error as { [key: string]: any };
+      if (errorAsObject.name === 'APIError' || (errorAsObject.status && errorAsObject.headers)) {
+        console.error('--- OpenAI API Error Details ---');
+        console.error('Status:', errorAsObject.status);
+        if (errorAsObject.code) console.error('Code:', errorAsObject.code);
+        if (errorAsObject.param) console.error('Param:', errorAsObject.param);
+        if (errorAsObject.type) console.error('Type:', errorAsObject.type);
+      }
     } else {
+      // Handle cases where the thrown value is not an Error object
       console.error('Unknown error type:', error);
     }
 
