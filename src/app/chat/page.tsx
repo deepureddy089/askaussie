@@ -1,30 +1,14 @@
 'use client'; // This component runs on the client side
 
 import { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown'; // Import the library
 import remarkGfm from 'remark-gfm'; // Import the GFM plugin
+import LoadingDots from '@/components/loadingdots';
+import Sidebar from '@/components/sidebar'; // Import the Sidebar component
+import Header from '@/components/header'; // Adjust path if needed
+import QuickStartSuggestions from '@/components/QuickStartSuggestions';
 
-// Loading dots animation for AI responses
-const LoadingDots = () => (
-  <div className="flex items-center space-x-1">
-    <motion.span 
-      className="w-1.5 h-1.5 bg-emerald-500 rounded-full" 
-      animate={{ opacity: [0.4, 1, 0.4] }} 
-      transition={{ repeat: Infinity, duration: 1, delay: 0 }} 
-    />
-    <motion.span 
-      className="w-1.5 h-1.5 bg-emerald-500 rounded-full" 
-      animate={{ opacity: [0.4, 1, 0.4] }} 
-      transition={{ repeat: Infinity, duration: 1, delay: 0.2 }} 
-    />
-    <motion.span 
-      className="w-1.5 h-1.5 bg-emerald-500 rounded-full" 
-      animate={{ opacity: [0.4, 1, 0.4] }} 
-      transition={{ repeat: Infinity, duration: 1, delay: 0.4 }} 
-    />
-  </div>
-);
 
 // Interface for a single chat message
 interface Message {
@@ -437,234 +421,39 @@ export default function ChatPage() {
         : 'bg-gradient-to-br from-gray-50 via-white to-gray-100 text-black'
     }`}>
       {/* Collapsible Left Sidebar */}
-      <AnimatePresence>
-        {sidebarOpen && (
-          <motion.div
-            initial={{ x: -320, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: -320, opacity: 0 }}
-            transition={{ duration: 0.3, ease: "easeInOut" }}
-            className={`fixed inset-y-0 left-0 w-80 border-r flex flex-col shadow-xl z-20 md:relative md:w-80 ${
-              isDark 
-                ? 'bg-gray-800 border-gray-700' 
-                : 'bg-white border-gray-200'
-            }`}
-          >
-            {/* Header Section - No duplicate logo when sidebar is open */}
-            <div className={`p-4 border-b ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
-              <button
-                onClick={() => {
-                  createNewChat();
-                  setSidebarOpen(false); // Close sidebar on new chat for mobile
-                }}
-                className={`w-full px-4 py-3 rounded-xl transition-all flex items-center justify-center font-medium ${
-                  isDark 
-                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white' 
-                    : 'bg-black hover:bg-gray-800 text-white'
-                }`}
-              >
-                <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                </svg>
-                New Chat
-              </button>
-            </div>
-
-            {/* Chat History Section */}
-            <div className="flex-1 overflow-y-auto p-2">
-              <div className={`text-xs font-medium uppercase tracking-wide px-3 py-2 mb-2 ${
-                isDark ? 'text-gray-400' : 'text-gray-500'
-              }`}>
-                Chat History ({chats.length})
-              </div>
-
-              {/* Enhanced Search Section */}
-              <div className={`p-3 mb-2 border-b ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Search conversations & messages..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className={`w-full px-3 py-2 pl-9 border rounded-lg text-sm focus:outline-none focus:ring-2 transition-all ${
-                      isDark 
-                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-emerald-500 focus:ring-emerald-500/20' 
-                        : 'bg-gray-50 border-gray-200 focus:border-emerald-400 focus:ring-emerald-100'
-                    }`}
-                  />
-                  <svg className={`absolute left-3 top-2.5 w-4 h-4 ${isDark ? 'text-gray-400' : 'text-gray-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                </div>
-                
-                {/* Results counter */}
-                {searchTerm && (
-                  <div className={`text-xs mt-2 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                    {filteredChats.length} result{filteredChats.length !== 1 ? 's' : ''} found
-                  </div>
-                )}
-              </div>
-
-              {chats.length === 0 ? (
-                <div className={`text-center text-sm py-8 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                  <div className="text-3xl mb-2">💬</div>
-                  No conversations yet
-                </div>
-              ) : filteredChats.length === 0 ? (
-                <div className={`text-center text-sm py-8 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                  <div className="text-3xl mb-2">🔍</div>
-                  No matches found
-                </div>
-              ) : (
-                filteredChats.map((chat) => (
-                  <motion.div
-                    key={chat.id}
-                    whileHover={{ scale: 1.02 }}
-                    onClick={() => {
-                      setCurrentChatId(chat.id);
-                      setSidebarOpen(false); // Close sidebar on chat selection for mobile
-                    }}
-                    className={`p-3 rounded-xl mb-2 cursor-pointer transition-all group relative ${
-                      currentChatId === chat.id
-                        ? isDark 
-                          ? 'bg-emerald-900/30 border border-emerald-700' 
-                          : 'bg-emerald-50 border border-emerald-300'
-                        : isDark 
-                          ? 'hover:bg-gray-700' 
-                          : 'hover:bg-gray-100'
-                    }`}
-                  >
-                    <div className={`font-medium text-sm truncate ${
-                      currentChatId === chat.id 
-                        ? isDark ? 'text-emerald-300' : 'text-emerald-700'
-                        : isDark ? 'text-white' : 'text-gray-900'
-                    }`}>
-                      {chat.title}
-                    </div>
-                    <div className={`text-xs mt-1 ${
-                      isDark ? 'text-gray-400' : 'text-gray-500'
-                    }`}>
-                      {chat.messages.length} messages • {new Date(chat.updatedAt).toLocaleDateString()}
-                    </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteChat(chat.id);
-                      }}
-                      className={`absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded ${
-                        isDark ? 'hover:bg-red-900/30' : 'hover:bg-red-100'
-                      }`}
-                      aria-label={`Delete chat ${chat.title}`}
-                    >
-                      <svg className="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
-                  </motion.div>
-                ))
-              )}
-            </div>
-
-            {/* Footer with theme info */}
-            <div className={`p-4 border-t ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
-              <div className={`text-sm text-center ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                Constitutional AI Assistant
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <Sidebar
+  chats={chats}
+  currentChatId={currentChatId}
+  setCurrentChatId={setCurrentChatId}
+  createNewChat={createNewChat}
+  deleteChat={deleteChat}
+  sidebarOpen={sidebarOpen}
+  setSidebarOpen={setSidebarOpen}
+  searchTerm={searchTerm}
+  setSearchTerm={setSearchTerm}
+  filteredChats={filteredChats}
+  isDark={isDark}
+/>
 
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col relative">
         {/* Elite Header with Theme Toggle */}
-        <div className={`h-16 border-b flex items-center px-4 md:px-6 backdrop-blur-lg transition-colors ${
-          isDark 
-            ? 'bg-gray-800/80 border-gray-700' 
-            : 'bg-white/80 border-gray-200'
-        }`}>
-          <div className="flex items-center gap-4">
-            {/* Smart Toggle Button */}
-            <motion.button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              whileTap={{ scale: 0.95 }}
-              className={`p-2 rounded-xl transition-all flex items-center justify-center ${
-                isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
-              }`}
-              aria-label="Toggle sidebar"
-            >
-              <motion.div
-                initial={false}
-                animate={sidebarOpen ? { rotate: 0 } : { rotate: 0 }}
-                transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-              >
-                {sidebarOpen ? (
-                  <svg className={`w-6 h-6 ${isDark ? 'text-gray-300' : 'text-gray-700'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
-                  </svg>
-                ) : (
-                  <svg className={`w-6 h-6 ${isDark ? 'text-gray-300' : 'text-gray-700'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h8M4 18h16" />
-                  </svg>
-                )}
-              </motion.div>
-            </motion.button>
-            
-            {/* Brand Identity - Only show when sidebar is closed or on larger screens */}
-            <div className="hidden md:flex items-center gap-2">
-              <div className="text-2xl">⚖️</div>
-              <h1 className={`text-xl font-bold tracking-tight ${isDark ? 'text-white' : 'text-gray-800'}`}>
-                AskAussie
-              </h1>
-            </div>
-          </div>
-          
-          {/* Right side controls */}
-          <div className="ml-auto flex items-center gap-3">
-            {/* Theme Toggle */}
-            <motion.button
-              onClick={toggleTheme}
-              whileTap={{ scale: 0.95 }}
-              className={`p-2 rounded-xl transition-all flex items-center justify-center ${
-                isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
-              }`}
-              aria-label={`Switch to ${theme === 'light' ? 'dark' : theme === 'dark' ? 'system' : 'light'} mode`}
-            >
-              {theme === 'light' ? (
-                <svg className={`w-5 h-5 ${isDark ? 'text-gray-300' : 'text-gray-700'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
-              ) : theme === 'dark' ? (
-                <svg className={`w-5 h-5 ${isDark ? 'text-gray-300' : 'text-gray-700'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                </svg>
-              ) : (
-                <svg className={`w-5 h-5 ${isDark ? 'text-gray-300' : 'text-gray-700'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                </svg>
-              )}
-            </motion.button>
-            
-            {/* Status indicator */}
-            <div className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-              {currentChat ? (
-                <span className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                  {currentChat.messages.length} messages
-                </span>
-              ) : (
-                'Ready to help with constitutional law'
-              )}
-            </div>
-          </div>
-        </div>
+        <Header
+  sidebarOpen={sidebarOpen}
+  setSidebarOpen={setSidebarOpen}
+  isDark={isDark}
+  theme={theme}
+  toggleTheme={toggleTheme}
+  currentChat={currentChat ?? null}
+/>
 
         {/* Elite Messages Area */}
         <div className="flex-1 overflow-y-auto p-4 md:p-6">
           {!currentChat || currentChat.messages.length === 0 ? (
             <div className="h-full flex items-center justify-center">
               <div className="text-center max-w-2xl mx-auto">
-                <div className="text-8xl mb-6">⚖️</div>
+                {/* Responsive icon size */}
+                <div className="text-6xl md:text-8xl mb-6">⚖️</div>
                 <h2 className={`text-3xl font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
                   Welcome to AskAussie
                 </h2>
@@ -672,65 +461,11 @@ export default function ChatPage() {
                   Your elite constitutional AI assistant. Get expert insights on Australian constitutional law, 
                   government powers, rights and freedoms, or specific constitutional provisions.
                 </p>
-                
-                {/* Elite Quick Start Suggestions */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
-                  {[
-                    { 
-                      title: "Legislative Powers", 
-                      question: "What are the main powers of the Australian Parliament under Section 51?",
-                      icon: "🏛️"
-                    },
-                    { 
-                      title: "Rights & Freedoms", 
-                      question: "What rights and freedoms are protected in the Australian Constitution?",
-                      icon: "🛡️"
-                    },
-                    { 
-                      title: "Federal Structure", 
-                      question: "How does the Constitution divide power between federal and state governments?",
-                      icon: "🌏"
-                    },
-                    { 
-                      title: "Constitutional Interpretation", 
-                      question: "How do courts interpret the Australian Constitution?",
-                      icon: "⚖️"
-                    }
-                  ].map((suggestion, index) => (
-                    <motion.button
-                      key={index}
-                      onClick={() => {
-                        setMessage(suggestion.question);
-                        setSidebarOpen(false); // Close sidebar on suggestion click for mobile
-                      }}
-                      whileHover={{ scale: 1.02, y: -2 }}
-                      whileTap={{ scale: 0.98 }}
-                      className={`p-4 text-left border rounded-xl transition-all group ${
-                        isDark 
-                          ? 'border-gray-700 hover:border-emerald-500 hover:bg-gray-800/50' 
-                          : 'border-gray-200 hover:border-emerald-300 hover:bg-emerald-50'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-xl">{suggestion.icon}</span>
-                        <h3 className={`font-medium ${
-                          isDark 
-                            ? 'text-white group-hover:text-emerald-300' 
-                            : 'text-gray-900 group-hover:text-emerald-700'
-                        }`}>
-                          {suggestion.title}
-                        </h3>
-                      </div>
-                      <p className={`text-sm ${
-                        isDark 
-                          ? 'text-gray-400 group-hover:text-emerald-400' 
-                          : 'text-gray-600 group-hover:text-emerald-600'
-                      }`}>
-                        {suggestion.question}
-                      </p>
-                    </motion.button>
-                  ))}
-                </div>
+                <QuickStartSuggestions
+                  isDark={isDark}
+                  setMessage={setMessage}
+                  setSidebarOpen={setSidebarOpen}
+                />
               </div>
             </div>
           ) : (
@@ -758,7 +493,7 @@ export default function ChatPage() {
                           {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
-                      <div className={`ml-11 leading-relaxed whitespace-pre-line break-words ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
+                      <div className={`leading-relaxed whitespace-pre-line break-words ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
                         {msg.content}
                       </div>
                     </div>
@@ -777,7 +512,7 @@ export default function ChatPage() {
                           {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
-                      <div className="ml-11">
+                      <div>
                         <div className={`prose max-w-none leading-relaxed break-words ${
                           isDark ? 'prose-invert text-gray-200' : 'prose-gray text-gray-800'
                         }`}>
